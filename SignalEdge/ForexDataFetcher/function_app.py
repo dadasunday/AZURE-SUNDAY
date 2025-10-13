@@ -18,14 +18,18 @@ logging.basicConfig(
 
 def get_connection_string():
     """Get SQL Server connection string from environment variables"""
-    server = os.environ.get('SQL_SERVER', 'hypv8669.hostedbyappliedi.net')
-    database = os.environ.get('SQL_DATABASE', 'TradingForeignCurrency')
-    username = os.environ.get('SQL_USERNAME', 'ali_muwwakkil')
-    password = os.environ.get('SQL_PASSWORD', 'ali00250025')
+    server = os.environ.get('SQL_SERVER')
+    database = os.environ.get('SQL_DATABASE')
+    username = os.environ.get('SQL_USERNAME')
+    password = os.environ.get('SQL_PASSWORD')
+
+    if not all([server, database, username, password]):
+        raise ValueError("Missing required database credentials in environment variables")
 
     return (
-        f'DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={server};'
-        f'DATABASE={database};UID={username};PWD={password}'
+        f'DRIVER={{ODBC Driver 18 for SQL Server}};SERVER={server};'
+        f'DATABASE={database};UID={username};PWD={password};'
+        f'Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;'
     )
 
 def fetch_and_store_market_data():
@@ -151,7 +155,10 @@ def fetch_and_store_market_data():
 
                             try:
                                 # Get API key from environment
-                                api_key = os.environ.get('ALPHAVANTAGE_API_KEY', 'IOX4MQY1X8GSVZ81')
+                                api_key = os.environ.get('ALPHAVANTAGE_API_KEY')
+                                if not api_key:
+                                    logging.error("ALPHAVANTAGE_API_KEY not set in environment variables")
+                                    return 0
 
                                 # Format API endpoint
                                 formatted_api_endpoint = api_endpoint.format(
