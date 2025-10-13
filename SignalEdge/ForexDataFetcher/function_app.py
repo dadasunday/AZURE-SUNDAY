@@ -29,7 +29,7 @@ def get_connection_string():
     return (
         f'DRIVER={{ODBC Driver 18 for SQL Server}};SERVER={server};'
         f'DATABASE={database};UID={username};PWD={password};'
-        f'Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;'
+        f'Encrypt=yes;TrustServerCertificate=no;Connection Timeout=60;LoginTimeout=60;'
     )
 
 def fetch_and_store_market_data():
@@ -467,11 +467,11 @@ def fetch_and_store_market_data():
             logging.info("SQL Server connection closed.")
 
 
-# Timer trigger: runs every 5 minutes
-@app.timer_trigger(schedule="0 */5 * * * *", arg_name="myTimer", run_on_startup=False,
+# Timer trigger: runs every 2 minutes
+@app.timer_trigger(schedule="0 */2 * * * *", arg_name="myTimer", run_on_startup=False,
               use_monitor=False)
 def ForexDataFetcherTimer(myTimer: func.TimerRequest) -> None:
-    """Timer-triggered function that runs every 5 minutes"""
+    """Timer-triggered function that runs every 2 minutes"""
     if myTimer.past_due:
         logging.info('The timer is past due!')
 
