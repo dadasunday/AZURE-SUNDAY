@@ -467,11 +467,11 @@ def fetch_and_store_market_data():
             logging.info("SQL Server connection closed.")
 
 
-# Timer trigger: runs every 2 minutes
-@app.timer_trigger(schedule="0 */2 * * * *", arg_name="myTimer", run_on_startup=False,
+# Timer trigger: runs once per hour (change to "0 */3 * * * *" after initial data load)
+@app.timer_trigger(schedule="0 0 * * * *", arg_name="myTimer", run_on_startup=False,
               use_monitor=False)
 def ForexDataFetcherTimer(myTimer: func.TimerRequest) -> None:
-    """Timer-triggered function that runs every 2 minutes"""
+    """Timer-triggered function that runs once per hour"""
     if myTimer.past_due:
         logging.info('The timer is past due!')
 

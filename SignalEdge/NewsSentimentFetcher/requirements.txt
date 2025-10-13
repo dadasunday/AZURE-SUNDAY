@@ -1,0 +1,9 @@
+# Azure Functions
+azure-functions
+
+# Database
+pyodbc
+
+# HTTP Requests
+requests
+
