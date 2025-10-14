@@ -162,19 +162,13 @@ def fetch_and_store_market_data():
                             merged_count = 0
 
                             try:
-                                # Get API key from environment
-                                api_key = os.environ.get('ALPHAVANTAGE_API_KEY')
-                                if not api_key:
-                                    logging.error("ALPHAVANTAGE_API_KEY not set in environment variables")
-                                    return 0
-
                                 # Format API endpoint
                                 formatted_api_endpoint = api_endpoint.format(
                                     symbol=f"{base_currency}{quote_currency}",
                                     interval=interval,
                                     time_period=time_period,
                                     series_type=series_type,
-                                    apikey=api_key
+                                    apikey=os.environ.get('ALPHAVANTAGE_API_KEY', 'IOX4MQY1X8GSVZ81')
                                 )
                                 logging.debug(f"Formatted API Endpoint: {formatted_api_endpoint}")
 
@@ -257,7 +251,7 @@ def fetch_and_store_market_data():
 
                         # Process all currency pairs
                         logging.info("Starting parallel processing of currency pairs...")
-                        with concurrent.futures.ThreadPoolExecutor(max_workers=int(os.environ.get('PAIR_WORKERS', '1'))) as executor:
+                        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
                             list(executor.map(process_currency_pair, currency_pairs))
 
                         # Log final results
@@ -381,7 +375,7 @@ def fetch_and_store_market_data():
                 # TypeID 6: FOREX Daily Exchange Data
                 if type_id == 6:
                     try:
-                        logging.info(f"Processing {resource_name} ...")
+                        logging.info("Processing {resource_name} ...")
                         cursor.execute("""
                             SELECT DISTINCT BaseCurrency, QuoteCurrency
                             FROM CurrencyPairs
