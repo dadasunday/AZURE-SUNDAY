@@ -1,10 +1,11 @@
 import azure.functions as func
 import logging
 import os
-import pyodbc
+import pyodbc  # kept for type hints; not used after switching to pytds
 import requests
 from datetime import datetime
 import json
+import pytds
 
 
 app = func.FunctionApp()
@@ -16,8 +17,8 @@ logging.basicConfig(
 )
 
 
-def get_connection_string():
-    """Build SQL Server connection string from environment variables."""
+def get_db_params():
+    """Get SQL Server connection params from environment variables."""
     server = os.environ.get('SQL_SERVER')
     database = os.environ.get('SQL_DATABASE')
     username = os.environ.get('SQL_USERNAME')
@@ -26,20 +27,26 @@ def get_connection_string():
     if not all([server, database, username, password]):
         raise ValueError("Missing required database credentials in environment variables")
 
-    return (
-        f'DRIVER={{ODBC Driver 18 for SQL Server}};SERVER={server};'
-        f'DATABASE={database};UID={username};PWD={password};'
-        f'Encrypt=yes;TrustServerCertificate=no;Connection Timeout=60;LoginTimeout=60;'
-    )
+    return server, database, username, password
 
 
 def fetch_and_store_news_sentiment():
     """Fetch Alpha Vantage NEWS_SENTIMENT and store into SQL Server staging table."""
     conn = None
     try:
-        logging.info("Connecting to SQL Server...")
-        connection_string = get_connection_string()
-        conn = pyodbc.connect(connection_string)
+        logging.info("Connecting to SQL Server via pytds (no ODBC dependency)...")
+        server, database, username, password = get_db_params()
+        conn = pytds.connect(
+            server=server,
+            database=database,
+            user=username,
+            password=password,
+            port=1433,
+            autocommit=False,
+            timeout=30,
+            encrypt=True,
+            validate_host=False,
+        )
         cursor = conn.cursor()
         logging.info("Connected to SQL Server.")
 
@@ -148,7 +155,7 @@ def fetch_and_store_news_sentiment():
             INSERT INTO [dbo].[Staging_NewsSentiment]
             (PublishedAt, Ticker, Topics, SentimentScore, SentimentLabel,
              RelevanceScore, Source, ArticleURL, Summary)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
         )
 
@@ -159,10 +166,9 @@ def fetch_and_store_news_sentiment():
                 cursor.execute(
                     """
                     SELECT 1 FROM [dbo].[Staging_NewsSentiment]
-                    WHERE PublishedAt = ? AND Ticker = ?
+                    WHERE PublishedAt = %s AND Ticker = %s
                     """,
-                    published_dt,
-                    ticker_name,
+                    (published_dt, ticker_name),
                 )
                 if cursor.fetchone():
                     continue
@@ -182,9 +188,9 @@ def fetch_and_store_news_sentiment():
             logging.info("SQL connection closed.")
 
 
-# Timer trigger: hourly (adjust as needed)
+# Timer trigger: every 3 minutes
 @app.timer_trigger(
-    schedule="0 0 * * * *",
+    schedule="0 */3 * * * *",
     arg_name="myTimer",
     run_on_startup=False,
     use_monitor=False,
@@ -207,4 +213,3 @@ def NewsSentimentFetcherHttp(req: func.HttpRequest) -> func.HttpResponse:
     except Exception as e:
         logging.error(f"HTTP trigger error: {e}")
         return func.HttpResponse(f"Error occurred: {str(e)}", status_code=500)
-
