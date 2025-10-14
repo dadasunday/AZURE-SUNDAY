@@ -6,15 +6,18 @@ import requests
 from datetime import datetime
 import json
 import pytds
+import certifi
 
 
 app = func.FunctionApp()
 
 # Configure logging
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
+# Quiet verbose driver logs in production
+logging.getLogger('pytds').setLevel(logging.WARNING)
 
 
 def get_db_params():
@@ -44,7 +47,7 @@ def fetch_and_store_news_sentiment():
             port=1433,
             autocommit=False,
             timeout=30,
-            validate_host=False,
+            cafile=certifi.where(),
         )
         cursor = conn.cursor()
         logging.info("Connected to SQL Server.")

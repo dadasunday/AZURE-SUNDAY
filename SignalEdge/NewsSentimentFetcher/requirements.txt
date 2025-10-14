@@ -9,3 +9,6 @@ requests
 
 # Pure-Python SQL Server driver (no OS deps)
 python-tds
+
+# TLS for pytds encryption
+pyopenssl
