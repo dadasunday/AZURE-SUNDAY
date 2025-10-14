@@ -44,7 +44,6 @@ def fetch_and_store_news_sentiment():
             port=1433,
             autocommit=False,
             timeout=30,
-            encrypt=True,
             validate_host=False,
         )
         cursor = conn.cursor()
