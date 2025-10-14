@@ -4,6 +4,7 @@ import pyodbc
 import requests
 import json
 import os
+import time
 import concurrent.futures
 from datetime import datetime
 from pytz import timezone, utc
@@ -35,6 +36,9 @@ def get_connection_string():
 def fetch_and_store_market_data():
     """Main function to fetch and store forex market data"""
     try:
+        start_ts = time.time()
+        budget_seconds = int(os.environ.get('RUN_BUDGET_SECONDS', '540'))  # default 9 minutes
+
         # Step 1: Connect to SQL Server
         logging.info("Attempting to connect to SQL Server...")
         connection_string = get_connection_string()
@@ -57,6 +61,10 @@ def fetch_and_store_market_data():
 
         # Step 3: Process each resource
         for resource in resources:
+            # Respect runtime budget to avoid platform timeout
+            if time.time() - start_ts > budget_seconds:
+                logging.warning(f"Run budget {budget_seconds}s exceeded; deferring remaining resources to next run.")
+                break
             try:
                 # Unpack the entire resource tuple
                 (
@@ -233,6 +241,11 @@ def fetch_and_store_market_data():
                                         logging.error(f"Error merging data for {base_currency}/{quote_currency}: {e}")
                                         conn.rollback()
 
+                                # Respect runtime budget between pairs
+                                if time.time() - start_ts > budget_seconds:
+                                    logging.warning("Run budget reached during pair processing; stopping early.")
+                                    return merged_count
+
                                 return merged_count
 
                             except requests.exceptions.RequestException as e:
@@ -244,7 +257,7 @@ def fetch_and_store_market_data():
 
                         # Process all currency pairs
                         logging.info("Starting parallel processing of currency pairs...")
-                        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                        with concurrent.futures.ThreadPoolExecutor(max_workers=int(os.environ.get('PAIR_WORKERS', '1'))) as executor:
                             list(executor.map(process_currency_pair, currency_pairs))
 
                         # Log final results
@@ -468,10 +481,11 @@ def fetch_and_store_market_data():
 
 
 # Timer trigger: runs once per hour (change to "0 */3 * * * *" after initial data load)
-@app.timer_trigger(schedule="0 0 * * * *", arg_name="myTimer", run_on_startup=False,
-              use_monitor=False)
+# Timer trigger: hourly, monitor enabled to avoid overlap
+@app.timer_trigger(schedule="0 0 * * * *", arg_name="myTimer", run_on_startup=True,
+              use_monitor=True)
 def ForexDataFetcherTimer(myTimer: func.TimerRequest) -> None:
-    """Timer-triggered function that runs once per hour"""
+    """Timer-triggered function that runs every hour"""
     if myTimer.past_due:
         logging.info('The timer is past due!')
 
