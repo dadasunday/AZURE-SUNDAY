@@ -65,15 +65,8 @@ def fetch_and_store_news_sentiment():
             logging.warning("No currency pairs found.")
             return
 
-        # Build a unique set of tickers like FOREX:USD, FOREX:EUR, etc.
-        unique_tickers = set()
-        for base_currency, quote_currency in rows:
-            if base_currency:
-                unique_tickers.add(f"FOREX:{base_currency}")
-            if quote_currency:
-                unique_tickers.add(f"FOREX:{quote_currency}")
-
-        logging.info(f"Processing {len(unique_tickers)} unique tickers for news sentiment.")
+        currency_pairs = rows
+        logging.info(f"Found {len(currency_pairs)} currency pairs for sentiment processing.")
 
         # API key
         api_key = os.environ.get('ALPHAVANTAGE_API_KEY')
@@ -87,68 +80,81 @@ def fetch_and_store_news_sentiment():
 
         processed_data = []
 
-        for ticker in unique_tickers:
-            try:
-                url = api_template.format(ticker=ticker, apikey=api_key)
-                logging.debug(f"Fetching NEWS_SENTIMENT for {ticker}")
-                resp = requests.get(url, timeout=15)
-                if resp.status_code != 200:
-                    logging.error(f"AlphaVantage API error {resp.status_code} for {ticker}")
-                    continue
+        # Step 3: Fetch Market News & Sentiment Data from API
+        for base_currency, quote_currency in currency_pairs:
+            tickers = [f"FOREX:{base_currency}", f"FOREX:{quote_currency}"]
+            tickers = list(set(tickers))
 
-                payload = resp.json()
-                feed = payload.get("feed", [])
-                if not feed:
-                    logging.info(f"No news feed items for {ticker}")
-                    continue
-
-                for item in feed:
-                    published_at = item.get("time_published")
-                    sentiment_score = item.get("overall_sentiment_score")
-                    sentiment_label = item.get("overall_sentiment_label")
-                    relevance_score = item.get("relevance_score", 0)
-                    source = item.get("source")
-                    article_url = item.get("url")
-                    summary = item.get("summary")
-
-                    if not published_at or sentiment_score is None or not sentiment_label:
+            for ticker in tickers:
+                try:
+                    url = api_template.format(ticker=ticker, apikey=api_key)
+                    logging.debug(f"Fetching NEWS_SENTIMENT for {ticker}")
+                    resp = requests.get(url, timeout=15)
+                    if resp.status_code != 200:
+                        logging.error(f"AlphaVantage API error {resp.status_code} for {ticker}")
                         continue
 
-                    try:
-                        published_dt = datetime.strptime(published_at, "%Y%m%dT%H%M%S")
-                    except ValueError:
-                        logging.error(f"Invalid time_published format: {published_at}")
+                    payload = resp.json()
+                    feed = payload.get("feed", [])
+                    if not feed:
+                        logging.info(f"No news feed items for {ticker}")
                         continue
 
-                    topics = ", ".join([t.get("topic", "") for t in item.get("topics", []) if t.get("topic")])
+                    for item in feed:
+                        published_at = item.get("time_published")
+                        sentiment_score = item.get("overall_sentiment_score")
+                        sentiment_label = item.get("overall_sentiment_label")
+                        relevance_score = item.get("relevance_score", 0)
+                        source = item.get("source")
+                        article_url = item.get("url")
+                        summary = item.get("summary")
 
-                    # If ticker_sentiment exists, use first ticker; else default to current ticker
-                    ts = item.get("ticker_sentiment") or []
-                    ticker_name = ts[0].get("ticker") if ts and ts[0].get("ticker") else ticker
+                        if not published_at or sentiment_score is None or not sentiment_label:
+                            continue
 
-                    processed_data.append(
-                        (
-                            published_dt,
-                            ticker_name,
-                            topics,
-                            float(sentiment_score),
-                            sentiment_label,
-                            float(relevance_score) if relevance_score is not None else 0.0,
-                            source,
-                            article_url,
-                            summary,
-                        )
-                    )
+                        try:
+                            published_dt = datetime.strptime(published_at, "%Y%m%dT%H%M%S")
+                        except ValueError:
+                            logging.error(f"Invalid time_published format: {published_at}")
+                            continue
 
-                logging.info(f"Processed {len(processed_data)} cumulative items (latest ticker {ticker}).")
+                        # Extract topics
+                        topics = ", ".join([t.get("topic", "") for t in item.get("topics", []) if t.get("topic")])
 
-            except requests.RequestException as e:
-                logging.error(f"Request error for {ticker}: {e}")
-            except Exception as e:
-                logging.error(f"Unexpected error for {ticker}: {e}")
+                        # Extract ticker sentiment - loop through all ticker_sentiment items
+                        for ticker_info in item.get("ticker_sentiment", []):
+                            ticker_name = ticker_info.get("ticker", "N/A")
+                            if not ticker_name.startswith("FOREX:"):
+                                continue  # Skip non-FOREX tickers like CRYPTO:BTC or NASDAQ:AAPL
+                            ticker_sentiment_score = float(ticker_info.get("ticker_sentiment_score", 0))
+                            ticker_sentiment_label = ticker_info.get("ticker_sentiment_label", "N/A")
+                            relevance = float(ticker_info.get("relevance_score", 0))
+
+                            processed_data.append(
+                                (
+                                    published_dt,
+                                    ticker_name,
+                                    topics,
+                                    ticker_sentiment_score,
+                                    ticker_sentiment_label,
+                                    relevance,
+                                    source,
+                                    article_url,
+                                    summary,
+                                )
+                            )
+
+                    logging.info(f"Successfully processed {len(processed_data)} records for {ticker}")
+
+                except requests.RequestException as e:
+                    logging.error(f"Request error for {ticker}: {e}")
+                except Exception as e:
+                    logging.error(f"Unexpected error for {ticker}: {e}")
+
+        logging.info(f"Total processed records: {len(processed_data)}")
 
         if not processed_data:
-            logging.warning("No data collected to insert.")
+            logging.warning("No data to insert.")
             return
 
         # Insert into staging table, skipping existing PublishedAt+Ticker
@@ -160,6 +166,8 @@ def fetch_and_store_news_sentiment():
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
         )
+
+        inserted_count = 0  # Track how many were inserted
 
         # Prepare existence check using both PublishedAt and Ticker to avoid collisions
         for rec in processed_data:
@@ -175,11 +183,12 @@ def fetch_and_store_news_sentiment():
                 if cursor.fetchone():
                     continue
                 cursor.execute(insert_sql, rec)
+                inserted_count += 1
             except Exception as e:
                 logging.error(f"Insert error for {published_dt} {ticker_name}: {e}")
 
         conn.commit()
-        logging.info("News sentiment data inserted successfully.")
+        logging.info(f"{inserted_count} new records inserted into Market News & Sentiment.")
 
     except Exception as e:
         logging.error(f"Unhandled exception: {e}")
