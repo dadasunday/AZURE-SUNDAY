@@ -18,14 +18,16 @@ logging.basicConfig(
 logging.info("Starting the script...")
 
 # SQL Server connection details
-server = 'hypv8669.hostedbyappliedi.net'
-database = 'TradingForeignCurrency'
-username = 'ali_muwwakkil'
-password = 'ali00250025'
+server = 'CODINGEMPIRE'#'hypv8669.hostedbyappliedi.net'
+database = 'TradingForeignCurrency-'
+# username = 'ali_muwwakkil'
+# password = 'ali00250025'
 connection_string = (
     f'DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={server};'
-    f'DATABASE={database};UID={username};PWD={password}'
-)
+    f'DATABASE={database};Trusted_Connection=yes;'
+    )
+#;UID={username};PWD={password}'
+#)
 def fetch_and_store_market_data():
 
     try:
