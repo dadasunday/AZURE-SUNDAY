@@ -1,0 +1,14 @@
+# Azure Functions
+azure-functions
+
+# Database
+pyodbc
+
+# HTTP Requests
+requests
+
+# Pure-Python SQL Server driver (no OS deps)
+python-tds
+
+# TLS for pytds encryption
+pyopenssl

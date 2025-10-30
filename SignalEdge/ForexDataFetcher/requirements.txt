@@ -1,0 +1,17 @@
+# Azure Functions
+azure-functions
+
+# Database
+pyodbc
+
+# HTTP Requests
+requests
+
+# Timezone handling
+pytz
+
+# JSON handling (built-in, but listed for clarity)
+# json is built-in
+
+# For parallel processing (built-in)
+# concurrent.futures is built-in
